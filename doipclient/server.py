@@ -244,9 +244,9 @@ class DoIPServer:
     @classmethod
     def send_vehicle_announcement(
         cls, protocol_version=0x02, interval=1.0):
-        # UDP_TEST_EQUIPMENT_REQUEST is dynamically assigned using udp_port=0
-        sock = cls._create_udp_socket(udp_port=UDP_DISCOVERY, timeout=A_DOIP_CTRL)
-
+        # Create a raw socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         def send_message():
             message = VehicleIdentificationResponse("L6T7854Z4ND000050", 0x1001, b"\x02\x00\x00\x00\x10\x01", b"\x00\x00\x00\x00\x00\x01", 0)
 
@@ -254,6 +254,18 @@ class DoIPServer:
             payload_type = payload_message_to_type[type(message)]
 
             data_bytes = cls._pack_doip(protocol_version, payload_type, payload_data)
+
+            # Create UDP header
+            source_port = UDP_DISCOVERY  # Replace with your source port
+            dest_port = UDP_DISCOVERY
+            length = 8 + len(data_bytes)  # UDP Header size + Data size
+            checksum = 0  # Checksum (optional)
+
+            udp_header = struct.pack('!HHHH', source_port, dest_port, length, checksum)
+
+            # Combine UDP header and data
+            packet = udp_header + data_bytes
+
             logger.debug(
                 "Sending DoIP Vehicle Announment Message: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
                     payload_type,
@@ -261,7 +273,7 @@ class DoIPServer:
                     " ".join(f"{byte:02X}" for byte in payload_data),
                 )
             )
-            sock.sendto(data_bytes, ('<broadcast>', UDP_DISCOVERY))
+            sock.sendto(packet, ('<broadcast>', dest_port))
 
             # Reschedule the function after `interval` seconds
             threading.Timer(interval, send_message).start()
