@@ -6,14 +6,14 @@ import time
 import ssl
 from enum import IntEnum
 from typing import Union
-from .constants import (
+from constants import (
     A_DOIP_CTRL,
     TCP_DATA_UNSECURED,
     UDP_DISCOVERY,
     A_PROCESSING_TIME,
     LINK_LOCAL_MULTICAST_ADDRESS,
 )
-from .messages import *
+from messages import *
 
 logger = logging.getLogger("doipclient")
 
