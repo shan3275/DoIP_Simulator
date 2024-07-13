@@ -188,10 +188,10 @@ def start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, furth
 
 
 
-from twisted.internet.protocol import DatagramProtocol
+from twisted.internet.protocol import DatagramProtocol, Factory, Protocol
 from twisted.internet import reactor
 
-class MyUDPServer(DatagramProtocol):
+class DoIPUDPServer(DatagramProtocol):
     def __init__(self):
         self.host_ip = self.get_host_ip()
         logger.info(f"Host IP: {self.host_ip}")
@@ -270,12 +270,26 @@ class MyUDPServer(DatagramProtocol):
         # 这里可以根据需要处理接收到的数据或者回复客户端
         self.transport.write(data_bytes, addr)
 
-def start_udp_server(port = 13400):
-    reactor.listenUDP(port, MyUDPServer())
+# TCP服务器逻辑
+class DoIPTCPServer(Protocol):
+    def connectionMade(self):
+        print("TCP: Connection made")
+
+    def dataReceived(self, data):
+        print(f"TCP: Received {data}")
+
+
+def start_server(port = 13400):
+    reactor.listenUDP(port, DoIPUDPServer())
     logger.info(f"Listening on UDP port {port}")
+    
+    factory = Factory()
+    factory.protocol = DoIPTCPServer
+    reactor.listenTCP(port, factory)
+    logger.info(f"Listening on TCP port {port}")
     reactor.run()
 
 if __name__ == "__main__":
     # Example usage
     #start_thread_send_vehicle_announcement("L6T7854Z4ND000050", 0x1001, b"\x02\x00\x00\x00\x10\x01", b"\x00\x00\x00\x00\x00\x01", 0)
-    start_udp_server()
+    start_server()
