@@ -328,8 +328,21 @@ class DoIPTCPServer(Protocol):
                         )
                     )    
                 self.transport.write(data_bytes)
-                # close the connection
-                self.transport.loseConnection()
+            if type(result) == DiagnosticMessage:
+                logger.info(f"Received DiagnosticMessage: {result}")
+                source_address = result.source_address
+                message = DiagnosticMessagePositiveAcknowledgement(self.logical_address, source_address, 0)
+                payload_data = message.pack()
+                payload_type = payload_message_to_type[type(message)]
+                data_bytes = self._pack_doip(payload_type, payload_data)
+                logger.debug(
+                        "Sending DoIP DiagnosticMessagePositiveAcknowledge: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                            payload_type,
+                            len(payload_data),
+                            " ".join(f"{byte:02X}" for byte in payload_data),
+                        )
+                    )    
+                self.transport.write(data_bytes)
 
 class DoIPFactory(Factory):
     def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
