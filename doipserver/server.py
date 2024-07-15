@@ -289,16 +289,42 @@ class DoIPTCPServer(Protocol):
         peer = self.transport.getPeer()
         logger.info(f"TCP: Connection made from {peer.host}:{peer.port}")
 
+    @staticmethod
+    def _pack_doip(payload_type, payload_data, protocol_version=0x02):
+        data_bytes = struct.pack(
+            "!BBHL",
+            protocol_version,
+            0xFF ^ protocol_version,
+            payload_type,
+            len(payload_data),
+        )
+        data_bytes += payload_data
+
+        return data_bytes
+
     def dataReceived(self, data):
         logger.info(f"TCP: Received {data}")
-        # parser = Parser()
-        # parser.reset()
-        # result = parser.read_message(data)
-        # if result:
-        #     if type(result) == RoutingActivationRequest:
-        #         logger.info(f"Received RoutingActivationRequest: {result}")
-        #         message = RoutingActivationResponse(0x00)
-
+        parser = Parser()
+        parser.reset()
+        result = parser.read_message(data)
+        if result:
+            if type(result) == RoutingActivationRequest:
+                logger.info(f"Received RoutingActivationRequest: {result}")
+                source_address = result.source_address
+                message = RoutingActivationResponse(source_address, self.logical_address, RoutingActivationResponse.ResponseCode.Success)
+                payload_data = message.pack()
+                payload_type = payload_message_to_type[type(message)]
+                data_bytes = self._pack_doip(payload_type, payload_data)
+                logger.debug(
+                        "Sending DoIP Routing activation response: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                            payload_type,
+                            len(payload_data),
+                            " ".join(f"{byte:02X}" for byte in payload_data),
+                        )
+                    )    
+                self.transport.write(data_bytes)
+                # close the connection
+                self.transport.loseConnection()
 
 class DoIPFactory(Factory):
     def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
@@ -316,9 +342,9 @@ def start_server(vin, logical_address, eid, gid ,port = 13400):
     reactor.listenUDP(port, DoIPUDPServer(vin, logical_address, eid, gid))
     logger.info(f"Listening on UDP port {port}")
     
-    # factory = DoIPFactory(vin, logical_address, eid, gid)
-    # reactor.listenTCP(port, factory)
-    # logger.info(f"Listening on TCP port {port}")
+    factory = DoIPFactory(vin, logical_address, eid, gid)
+    reactor.listenTCP(port, factory)
+    logger.info(f"Listening on TCP port {port}")
     reactor.run()
 
 
