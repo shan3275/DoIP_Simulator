@@ -6,6 +6,7 @@ import time
 import sys
 import threading
 import ssl
+import yaml
 from enum import IntEnum
 from typing import Union
 from constants import (
@@ -17,7 +18,7 @@ from constants import (
 )
 from messages import *
 
-logger = logging.getLogger("doipclient")
+logger = logging.getLogger("doipserver")
 # 设置日志级别
 logger.setLevel(logging.DEBUG)
 
@@ -192,9 +193,14 @@ from twisted.internet.protocol import DatagramProtocol, Factory, Protocol
 from twisted.internet import reactor
 
 class DoIPUDPServer(DatagramProtocol):
-    def __init__(self):
+    def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
         self.host_ip = self.get_host_ip()
         logger.info(f"Host IP: {self.host_ip}")
+        self.vin = vin
+        self.logical_address = logical_address
+        self.eid = eid
+        self.gid = gid
+        self.further_action_required = further_action_required
 
     def get_host_ip(self):
         try:
@@ -253,7 +259,7 @@ class DoIPUDPServer(DatagramProtocol):
                 logger.info(f"Received Unknown Message: {result}")
                 flag = 0
         if flag == 1:
-            message = VehicleIdentificationResponse("L6T7854Z4ND000050", 0x1001, b"\x02\x00\x00\x00\x10\x01", b"\x00\x00\x00\x00\x00\x01", 0)
+            message = VehicleIdentificationResponse(self.vin, self.logical_address, self.eid, self.gid, self.further_action_required)
         else:
             message = GenericDoIPNegativeAcknowledge(1)
 
@@ -272,24 +278,76 @@ class DoIPUDPServer(DatagramProtocol):
 
 # TCP服务器逻辑
 class DoIPTCPServer(Protocol):
+    def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
+        self.vin = vin
+        self.logical_address = logical_address
+        self.eid = eid
+        self.gid = gid
+        self.further_action_required = further_action_required
+
     def connectionMade(self):
-        print("TCP: Connection made")
+        peer = self.transport.getPeer()
+        logger.info(f"TCP: Connection made from {peer.host}:{peer.port}")
 
     def dataReceived(self, data):
-        print(f"TCP: Received {data}")
+        logger.info(f"TCP: Received {data}")
+        # parser = Parser()
+        # parser.reset()
+        # result = parser.read_message(data)
+        # if result:
+        #     if type(result) == RoutingActivationRequest:
+        #         logger.info(f"Received RoutingActivationRequest: {result}")
+        #         message = RoutingActivationResponse(0x00)
 
 
-def start_server(port = 13400):
-    reactor.listenUDP(port, DoIPUDPServer())
+class DoIPFactory(Factory):
+    def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
+        self.vin = vin
+        self.logical_address = logical_address
+        self.eid = eid
+        self.gid = gid
+        self.further_action_required = further_action_required
+
+    def buildProtocol(self, addr):
+        return DoIPTCPServer(self.vin, self.logical_address, self.eid, self.gid, self.further_action_required)
+
+
+def start_server(vin, logical_address, eid, gid ,port = 13400):
+    reactor.listenUDP(port, DoIPUDPServer(vin, logical_address, eid, gid))
     logger.info(f"Listening on UDP port {port}")
     
-    factory = Factory()
-    factory.protocol = DoIPTCPServer
-    reactor.listenTCP(port, factory)
-    logger.info(f"Listening on TCP port {port}")
+    # factory = DoIPFactory(vin, logical_address, eid, gid)
+    # reactor.listenTCP(port, factory)
+    # logger.info(f"Listening on TCP port {port}")
     reactor.run()
 
+
+def load_ecu_conf():
+    try:
+        with open('yaml.conf', 'r') as file:
+            ecu_conf = yaml.safe_load(file)
+            logger.info(ecu_conf)
+            return ecu_conf
+    except FileNotFoundError:
+        logger.error("File not found.")
+        return None
+    except PermissionError:
+        logger.error("Permission denied.")
+        return None
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}")
+        return None
+
+
 if __name__ == "__main__":
+    ecu_conf = load_ecu_conf()
+    if ecu_conf is None:
+        exit(1)
+    vin = ecu_conf['ECU']['vin']
+    logical_address = ecu_conf['ECU']['logicalAddress']
+    eid = ecu_conf['ECU']['eid']
+    gid = ecu_conf['ECU']['gid']
+    
     # Example usage
-    #start_thread_send_vehicle_announcement("L6T7854Z4ND000050", 0x1001, b"\x02\x00\x00\x00\x10\x01", b"\x00\x00\x00\x00\x00\x01", 0)
-    start_server()
+    #start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, 0)
+    start_server(vin, logical_address, eid, gid)
