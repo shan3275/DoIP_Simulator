@@ -18,6 +18,10 @@ from constants import (
 )
 from messages import *
 
+from udsoncan.Request import Request
+from udsoncan.Response import Response
+from udsoncan.services import *
+
 logger = logging.getLogger("doipserver")
 # 设置日志级别
 logger.setLevel(logging.DEBUG)
@@ -165,13 +169,13 @@ class DoIPVechileAnnouncementMessageBroadcast:
             # Combine UDP header and data
             packet = udp_header + data_bytes
 
-            logger.debug(
-                "Sending DoIP Vehicle Announment Message: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
-                    payload_type,
-                    len(payload_data),
-                    " ".join(f"{byte:02X}" for byte in payload_data),
-                )
-            )
+            # logger.debug(
+            #     "Sending DoIP Vehicle Announment Message: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+            #         payload_type,
+            #         len(payload_data),
+            #         " ".join(f"{byte:02X}" for byte in payload_data),
+            #     )
+            # )
             sock.sendto(packet, ('<broadcast>', dest_port))
 
             # Reschedule the function after `interval` seconds
@@ -237,7 +241,7 @@ class DoIPUDPServer(DatagramProtocol):
     def datagramReceived(self, datagram, addr):
         # 过滤指定源端口号的会话，例如源端口号为12345
         if addr[0] == self.host_ip:
-            logger.info(f"Ignored: {datagram} from {addr}")
+            # logger.info(f"Ignored: {datagram} from {addr}")
             return  # 不处理来自此端口的数据
         # 当UDP服务器接收到数据时调用
         logger.info(f"Received: {datagram} from {addr}")
@@ -331,6 +335,10 @@ class DoIPTCPServer(Protocol):
             if type(result) == DiagnosticMessage:
                 logger.info(f"Received DiagnosticMessage: {result}")
                 source_address = result.source_address
+                target_address = result.target_address
+                user_data = result.user_data # uds message
+
+                # doip response
                 message = DiagnosticMessagePositiveAcknowledgement(self.logical_address, source_address, 0)
                 payload_data = message.pack()
                 payload_type = payload_message_to_type[type(message)]
@@ -343,6 +351,28 @@ class DoIPTCPServer(Protocol):
                         )
                     )    
                 self.transport.write(data_bytes)
+
+                # deal with uds message
+                logger.info(f"Received UDS Message: {user_data}")
+                request = Request.from_payload(user_data)
+                if request is not None and request.service is not None and request.suppress_positive_response is not True:
+                    logger.info(f"need to send response")
+                    if request.service == ECUReset:
+                        logger.info(f"Received ECUReset, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}") 
+                        uds_response = Response(ECUReset,0, b'\x01').get_payload()
+                        message = DiagnosticMessage(self.logical_address, source_address, uds_response)
+                        payload_data = message.pack()
+                        payload_type = payload_message_to_type[type(message)]
+                        data_bytes = self._pack_doip(payload_type, payload_data)
+                        logger.debug(
+                                "Sending DoIP DiagnosticMessage: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                                    payload_type,
+                                    len(payload_data),
+                                    " ".join(f"{byte:02X}" for byte in payload_data),
+                                )
+                            )
+                        self.transport.write(data_bytes)
+
 
 class DoIPFactory(Factory):
     def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
@@ -393,5 +423,5 @@ if __name__ == "__main__":
     gid = ecu_conf['ECU']['gid']
     
     # Example usage
-    start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, 0)
+    # start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, 0)
     start_server(vin, logical_address, eid, gid)
