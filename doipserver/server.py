@@ -255,7 +255,7 @@ class DoIPUDPServer(DatagramProtocol):
         if flag == 1:
             message = VehicleIdentificationResponse("L6T7854Z4ND000050", 0x1001, b"\x02\x00\x00\x00\x10\x01", b"\x00\x00\x00\x00\x00\x01", 0)
         else:
-            message = DoIPGenericNegativeAcknowledge(1)
+            message = GenericDoIPNegativeAcknowledge(1)
 
         payload_data = message.pack()
         payload_type = payload_message_to_type[type(message)]
