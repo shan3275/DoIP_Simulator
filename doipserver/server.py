@@ -255,11 +255,16 @@ class DoIPUDPServer(DatagramProtocol):
             elif type(result) == VehicleIdentificationRequestWithVIN:
                 logger.info(f"Received VehicleIdentificationRequestWithVIN: {result}")
                 flag = 1
+            elif type(result) == DoipEntityStatusRequest:
+                logger.info(f"Received DoipEntityStatusRequest: {result}")
+                flag = 2
             else:
                 logger.info(f"Received Unknown Message: {result}")
                 flag = 0
         if flag == 1:
             message = VehicleIdentificationResponse(self.vin, self.logical_address, self.eid, self.gid, self.further_action_required)
+        elif flag == 2:
+            message = EntityStatusResponse(0, 1, 1)
         else:
             message = GenericDoIPNegativeAcknowledge(1)
 
@@ -375,5 +380,5 @@ if __name__ == "__main__":
     gid = ecu_conf['ECU']['gid']
     
     # Example usage
-    #start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, 0)
+    start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, 0)
     start_server(vin, logical_address, eid, gid)
