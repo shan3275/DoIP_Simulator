@@ -24,6 +24,7 @@ from udsoncan.Request import Request
 from udsoncan.Response import Response
 from udsoncan.services import *
 from udsoncan import DataIdentifier
+import random
 
 logger = logging.getLogger("doipserver")
 # 设置日志级别
@@ -307,6 +308,7 @@ class DoIPTCPServer(Protocol):
         self.eid = eid
         self.gid = gid
         self.further_action_required = further_action_required
+        self.seed = random.randbytes(3)
 
     def connectionMade(self):
         peer = self.transport.getPeer()
@@ -374,27 +376,31 @@ class DoIPTCPServer(Protocol):
 
 
     def _uds_request_handler(self, source_address, target_address, user_data):
-        logger.info(f"Received UDS Message: {user_data}")
+        logger.info(f"Received UDS Message: {user_data}  len: {len(user_data)} {type(user_data)}")
         request = Request.from_payload(user_data)
         if request is not None and request.service is not None and request.suppress_positive_response is not True:
             code = 0
-            data = b'\x01'
+            subfunction = request.subfunction
+            logger.info(f"UDS Request subfunction: {subfunction}")
+            data = b''
             if request.service == ECUReset:
                 logger.info(
                     f"Received ECUReset, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 code = 0
-                data = b'\x01'
+                data = subfunction.to_bytes(1, byteorder='big')
 
             elif request.service == TesterPresent:
                 logger.info(
                     f"Received TesterPresent, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 code = 0
-                data = b'\x00'
+                data = subfunction.to_bytes(1, byteorder='big')
+
             elif request.service == DiagnosticSessionControl:
                 logger.info(
                     f"Received DiagnosticSessionControl, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 code = 0
-                data = b'\x02\x00\x19\x01\xf4'
+                data = subfunction.to_bytes(1, byteorder='big') + b'\x00\x19\x01\xf4'
+
             elif request.service == ReadDataByIdentifier:
                 logger.info(
                     f"Received ReadDataByIdentifier, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
@@ -406,6 +412,17 @@ class DoIPTCPServer(Protocol):
                 elif id == DataIdentifier.VIN:
                     id_value = self.vin.encode()
                 data = request.data + id_value
+            
+            elif request.service == SecurityAccess:
+                logger.info(
+                    f"Received SecurityAccess, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                code = 0
+                logger.info(f"SecurityAccess: {request}  {request.data}")
+                if subfunction == 0x01:
+                    data = subfunction.to_bytes(1, byteorder='big') + self.seed
+                elif subfunction == 0x02:
+                    data = subfunction.to_bytes(1, byteorder='big')
+                logger.info(f"request.data: {request.data}")
             
             if request.suppress_positive_response is not True :
                 # 确保data是bytes类型
