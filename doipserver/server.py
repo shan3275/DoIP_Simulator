@@ -1,3 +1,5 @@
+from twisted.internet import reactor
+from twisted.internet.protocol import DatagramProtocol, Factory, Protocol
 import logging
 import ipaddress
 import socket
@@ -31,11 +33,13 @@ stream_handler = logging.StreamHandler(sys.stdout)
 stream_handler.setLevel(logging.DEBUG)
 
 # （可选）设置日志格式
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 stream_handler.setFormatter(formatter)
 
 # 将流处理器添加到logger
 logger.addHandler(stream_handler)
+
 
 class Parser:
     """Implements state machine for DoIP transport layer.
@@ -125,6 +129,7 @@ class Parser:
                         self.payload_type, self.payload, self.payload_size
                     )
 
+
 class DoIPVechileAnnouncementMessageBroadcast:
     def __init__(
         self,
@@ -144,19 +149,24 @@ class DoIPVechileAnnouncementMessageBroadcast:
         data_bytes += payload_data
 
         return data_bytes
+
     @classmethod
     def send_vehicle_announcement(
-        cls, vin, logical_address, eid, gid, further_action_required, protocol_version=0x02, interval=1.0):
+            cls, vin, logical_address, eid, gid, further_action_required, protocol_version=0x02, interval=1.0):
         # Create a raw socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+        sock = socket.socket(
+            socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
         def send_message():
-            message = VehicleIdentificationResponse(vin, logical_address, eid, gid, further_action_required)
+            message = VehicleIdentificationResponse(
+                vin, logical_address, eid, gid, further_action_required)
 
             payload_data = message.pack()
             payload_type = payload_message_to_type[type(message)]
 
-            data_bytes = cls._pack_doip(protocol_version, payload_type, payload_data)
+            data_bytes = cls._pack_doip(
+                protocol_version, payload_type, payload_data)
 
             # Create UDP header
             source_port = UDP_DISCOVERY  # Replace with your source port
@@ -164,7 +174,8 @@ class DoIPVechileAnnouncementMessageBroadcast:
             length = 8 + len(data_bytes)  # UDP Header size + Data size
             checksum = 0  # Checksum (optional)
 
-            udp_header = struct.pack('!HHHH', source_port, dest_port, length, checksum)
+            udp_header = struct.pack(
+                '!HHHH', source_port, dest_port, length, checksum)
 
             # Combine UDP header and data
             packet = udp_header + data_bytes
@@ -184,17 +195,17 @@ class DoIPVechileAnnouncementMessageBroadcast:
         # Start the thread
         send_message()
 
+
 def send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required, protocol_version=0x02, interval=2.0):
-    DoIPVechileAnnouncementMessageBroadcast.send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required, protocol_version, interval)
+    DoIPVechileAnnouncementMessageBroadcast.send_vehicle_announcement(
+        vin, logical_address, eid, gid, further_action_required, protocol_version, interval)
+
 
 def start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required, protocol_version=0x02, interval=2.0):
-    t = threading.Thread(target=send_vehicle_announcement, args=(vin, logical_address, eid, gid, further_action_required, protocol_version, interval))
+    t = threading.Thread(target=send_vehicle_announcement, args=(
+        vin, logical_address, eid, gid, further_action_required, protocol_version, interval))
     t.start()
 
-
-
-from twisted.internet.protocol import DatagramProtocol, Factory, Protocol
-from twisted.internet import reactor
 
 class DoIPUDPServer(DatagramProtocol):
     def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
@@ -254,10 +265,12 @@ class DoIPUDPServer(DatagramProtocol):
                 logger.info(f"Received VehicleIdentificationRequest: {result}")
                 flag = 1
             elif type(result) == VehicleIdentificationRequestWithEID:
-                logger.info(f"Received VehicleIdentificationRequestWithEID: {result}")
+                logger.info(
+                    f"Received VehicleIdentificationRequestWithEID: {result}")
                 flag = 1
             elif type(result) == VehicleIdentificationRequestWithVIN:
-                logger.info(f"Received VehicleIdentificationRequestWithVIN: {result}")
+                logger.info(
+                    f"Received VehicleIdentificationRequestWithVIN: {result}")
                 flag = 1
             elif type(result) == DoipEntityStatusRequest:
                 logger.info(f"Received DoipEntityStatusRequest: {result}")
@@ -266,7 +279,8 @@ class DoIPUDPServer(DatagramProtocol):
                 logger.info(f"Received Unknown Message: {result}")
                 flag = 0
         if flag == 1:
-            message = VehicleIdentificationResponse(self.vin, self.logical_address, self.eid, self.gid, self.further_action_required)
+            message = VehicleIdentificationResponse(
+                self.vin, self.logical_address, self.eid, self.gid, self.further_action_required)
         elif flag == 2:
             message = EntityStatusResponse(0, 1, 1)
         else:
@@ -276,16 +290,18 @@ class DoIPUDPServer(DatagramProtocol):
         payload_type = payload_message_to_type[type(message)]
         data_bytes = self._pack_doip(payload_type, payload_data)
         logger.debug(
-                "Sending DoIP Vehicle Identification Request: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
-                    payload_type,
-                    len(payload_data),
-                    " ".join(f"{byte:02X}" for byte in payload_data),
-                )
-            )            
+            "Sending DoIP Vehicle Identification Request: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                payload_type,
+                len(payload_data),
+                " ".join(f"{byte:02X}" for byte in payload_data),
+            )
+        )
         # 这里可以根据需要处理接收到的数据或者回复客户端
         self.transport.write(data_bytes, addr)
 
 # TCP服务器逻辑
+
+
 class DoIPTCPServer(Protocol):
     def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
         self.vin = vin
@@ -311,6 +327,63 @@ class DoIPTCPServer(Protocol):
 
         return data_bytes
 
+    def _send_routing_activation_response(self, client_logical_address, logical_address, code):
+        message = RoutingActivationResponse(
+            client_logical_address, logical_address, code)
+        payload_data = message.pack()
+        payload_type = payload_message_to_type[type(message)]
+        data_bytes = self._pack_doip(payload_type, payload_data)
+        logger.debug(
+            "Sending DoIP Routing activation response: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                payload_type,
+                len(payload_data),
+                " ".join(f"{byte:02X}" for byte in payload_data),
+            )
+        )
+        self.transport.write(data_bytes)
+
+    def _send_diagnostic_acknowledgement(self, source_address, target_address, ack_code):
+        message = DiagnosticMessagePositiveAcknowledgement(
+            source_address, target_address, ack_code)
+        payload_data = message.pack()
+        payload_type = payload_message_to_type[type(message)]
+        data_bytes = self._pack_doip(payload_type, payload_data)
+        logger.debug(
+            "Sending DoIP DiagnosticMessagePositiveAcknowledge: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                payload_type,
+                len(payload_data),
+                " ".join(f"{byte:02X}" for byte in payload_data),
+            )
+        )
+        self.transport.write(data_bytes)
+        self.transport.doWrite()
+
+    def _uds_request_handler(self, source_address, target_address, user_data):
+        logger.info(f"Received UDS Message: {user_data}")
+        request = Request.from_payload(user_data)
+        if request is not None and request.service is not None and request.suppress_positive_response is not True:
+            logger.info(f"need to send response")
+            if request.service == ECUReset:
+                logger.info(
+                    f"Received ECUReset, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                uds_response = Response(
+                    ECUReset, 0, b'\x01').get_payload()
+                message = DiagnosticMessage(
+                    source_address, target_address, uds_response)
+                payload_data = message.pack()
+                payload_type = payload_message_to_type[type(message)]
+                data_bytes = self._pack_doip(
+                    payload_type, payload_data)
+                logger.debug(
+                    "Sending DoIP DiagnosticMessage: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                        payload_type,
+                        len(payload_data),
+                        " ".join(
+                            f"{byte:02X}" for byte in payload_data),
+                    )
+                )
+                self.transport.write(data_bytes)
+
     def dataReceived(self, data):
         logger.info(f"TCP: Received {data}")
         parser = Parser()
@@ -321,60 +394,23 @@ class DoIPTCPServer(Protocol):
             if type(result) == RoutingActivationRequest:
                 logger.info(f"Received RoutingActivationRequest: {result}")
                 source_address = result.source_address
-                message = RoutingActivationResponse(source_address, self.logical_address, RoutingActivationResponse.ResponseCode.Success)
-                payload_data = message.pack()
-                payload_type = payload_message_to_type[type(message)]
-                data_bytes = self._pack_doip(payload_type, payload_data)
-                logger.debug(
-                        "Sending DoIP Routing activation response: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
-                            payload_type,
-                            len(payload_data),
-                            " ".join(f"{byte:02X}" for byte in payload_data),
-                        )
-                    )    
-                self.transport.write(data_bytes)
+                self._send_routing_activation_response(
+                    source_address, self.logical_address, RoutingActivationResponse.ResponseCode.Success)
 
             # 诊断消息
             if type(result) == DiagnosticMessage:
                 logger.info(f"Received DiagnosticMessage: {result}")
                 source_address = result.source_address
                 target_address = result.target_address
-                user_data = result.user_data # uds message
+                user_data = result.user_data  # uds message
 
                 # 诊断消息回复
-                message = DiagnosticMessagePositiveAcknowledgement(self.logical_address, source_address, 0)
-                payload_data = message.pack()
-                payload_type = payload_message_to_type[type(message)]
-                data_bytes = self._pack_doip(payload_type, payload_data)
-                logger.debug(
-                        "Sending DoIP DiagnosticMessagePositiveAcknowledge: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
-                            payload_type,
-                            len(payload_data),
-                            " ".join(f"{byte:02X}" for byte in payload_data),
-                        )
-                    )    
-                self.transport.write(data_bytes)
-                self.transport.doWrite()
-                # deal with uds message
-                logger.info(f"Received UDS Message: {user_data}")
-                request = Request.from_payload(user_data)
-                if request is not None and request.service is not None and request.suppress_positive_response is not True:
-                    logger.info(f"need to send response")
-                    if request.service == ECUReset:
-                        logger.info(f"Received ECUReset, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}") 
-                        uds_response = Response(ECUReset,0, b'\x01').get_payload()
-                        message = DiagnosticMessage(self.logical_address, source_address, uds_response)
-                        payload_data = message.pack()
-                        payload_type = payload_message_to_type[type(message)]
-                        data_bytes = self._pack_doip(payload_type, payload_data)
-                        logger.debug(
-                                "Sending DoIP DiagnosticMessage: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
-                                    payload_type,
-                                    len(payload_data),
-                                    " ".join(f"{byte:02X}" for byte in payload_data),
-                                )
-                            )
-                        self.transport.write(data_bytes)
+                self._send_diagnostic_acknowledgement(
+                    self.logical_address, source_address, 0)
+
+                # UDS MESSAGE 处理
+                self._uds_request_handler(
+                    self.logical_address, source_address, user_data)
 
 
 class DoIPFactory(Factory):
@@ -389,10 +425,10 @@ class DoIPFactory(Factory):
         return DoIPTCPServer(self.vin, self.logical_address, self.eid, self.gid, self.further_action_required)
 
 
-def start_server(vin, logical_address, eid, gid ,port = 13400):
+def start_server(vin, logical_address, eid, gid, port=13400):
     reactor.listenUDP(port, DoIPUDPServer(vin, logical_address, eid, gid))
     logger.info(f"Listening on UDP port {port}")
-    
+
     factory = DoIPFactory(vin, logical_address, eid, gid)
     reactor.listenTCP(port, factory)
     logger.info(f"Listening on TCP port {port}")
@@ -424,7 +460,9 @@ if __name__ == "__main__":
     logical_address = ecu_conf['ECU']['logicalAddress']
     eid = ecu_conf['ECU']['eid']
     gid = ecu_conf['ECU']['gid']
-    
+
+    logger.info(payload_message_to_type)
+
     # Example usage
     # start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, 0)
     start_server(vin, logical_address, eid, gid)
