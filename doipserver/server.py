@@ -376,20 +376,24 @@ class DoIPTCPServer(Protocol):
         logger.info(f"Received UDS Message: {user_data}")
         request = Request.from_payload(user_data)
         if request is not None and request.service is not None and request.suppress_positive_response is not True:
-            logger.info(f"need to send response")
+            code = 0
+            data = b'\x01'
             if request.service == ECUReset:
                 logger.info(
                     f"Received ECUReset, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                uds_response = Response(
-                    ECUReset, 0, b'\x01').get_payload()
+                code = 0
+                data = b'\x01'
 
             elif request.service == TesterPresent:
                 logger.info(
                     f"Received TesterPresent, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                uds_response = Response(
-                    TesterPresent, 0, b'\x00').get_payload()
-
-            self._send_diagnostic_message(source_address, target_address, uds_response)
+                code = 0
+                data = b'\x00'
+            
+            if request.suppress_positive_response is not True :
+                logger.info(f"Sending UDS Response: {code}, {data}")
+                uds_response = Response(request.service, code, data).get_payload()
+                self._send_diagnostic_message(source_address, target_address, uds_response)
 
     def dataReceived(self, data):
         logger.info(f"TCP: Received {data}")
