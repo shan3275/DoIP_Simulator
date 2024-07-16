@@ -317,6 +317,7 @@ class DoIPTCPServer(Protocol):
         parser.reset()
         result = parser.read_message(data)
         if result:
+            # 路由激活请求
             if type(result) == RoutingActivationRequest:
                 logger.info(f"Received RoutingActivationRequest: {result}")
                 source_address = result.source_address
@@ -332,13 +333,15 @@ class DoIPTCPServer(Protocol):
                         )
                     )    
                 self.transport.write(data_bytes)
+
+            # 诊断消息
             if type(result) == DiagnosticMessage:
                 logger.info(f"Received DiagnosticMessage: {result}")
                 source_address = result.source_address
                 target_address = result.target_address
                 user_data = result.user_data # uds message
 
-                # doip response
+                # 诊断消息回复
                 message = DiagnosticMessagePositiveAcknowledgement(self.logical_address, source_address, 0)
                 payload_data = message.pack()
                 payload_type = payload_message_to_type[type(message)]
@@ -351,7 +354,7 @@ class DoIPTCPServer(Protocol):
                         )
                     )    
                 self.transport.write(data_bytes)
-
+                self.transport.doWrite()
                 # deal with uds message
                 logger.info(f"Received UDS Message: {user_data}")
                 request = Request.from_payload(user_data)
