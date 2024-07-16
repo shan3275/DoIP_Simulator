@@ -190,22 +190,19 @@ class DoIPVechileAnnouncementMessageBroadcast:
             sock.sendto(packet, ('<broadcast>', dest_port))
 
             # Reschedule the function after `interval` seconds
-            threading.Timer(interval, send_message).start()
+            # threading.Timer(interval, send_message).start()
 
         # Start the thread
         send_message()
 
 
-def send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required, protocol_version=0x02, interval=2.0):
+def send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required=0, protocol_version=0x02, interval=2.0):
     DoIPVechileAnnouncementMessageBroadcast.send_vehicle_announcement(
-        vin, logical_address, eid, gid, further_action_required, protocol_version, interval)
+            vin, logical_address, eid, gid, further_action_required, protocol_version, interval)
 
-
-def start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required, protocol_version=0x02, interval=2.0):
-    t = threading.Thread(target=send_vehicle_announcement, args=(
-        vin, logical_address, eid, gid, further_action_required, protocol_version, interval))
-    t.start()
-
+def start_periodic_task_send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required=0, protocol_version=0x02, interval=2.0):
+    send_vehicle_announcement(vin, logical_address, eid, gid, further_action_required, protocol_version, interval)
+    reactor.callLater(interval, start_periodic_task_send_vehicle_announcement, vin, logical_address, eid, gid, further_action_required, protocol_version, interval)
 
 class DoIPUDPServer(DatagramProtocol):
     def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
@@ -358,6 +355,23 @@ class DoIPTCPServer(Protocol):
         self.transport.write(data_bytes)
         self.transport.doWrite()
 
+
+    def _send_diagnostic_message(self, source_address, target_address, user_data):
+        message = DiagnosticMessage(
+            source_address, target_address, user_data)
+        payload_data = message.pack()
+        payload_type = payload_message_to_type[type(message)]
+        data_bytes = self._pack_doip(payload_type, payload_data)
+        logger.debug(
+            "Sending DoIP DiagnosticMessage: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
+                payload_type,
+                len(payload_data),
+                " ".join(f"{byte:02X}" for byte in payload_data),
+            )
+        )
+        self.transport.write(data_bytes)
+
+
     def _uds_request_handler(self, source_address, target_address, user_data):
         logger.info(f"Received UDS Message: {user_data}")
         request = Request.from_payload(user_data)
@@ -368,21 +382,14 @@ class DoIPTCPServer(Protocol):
                     f"Received ECUReset, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 uds_response = Response(
                     ECUReset, 0, b'\x01').get_payload()
-                message = DiagnosticMessage(
-                    source_address, target_address, uds_response)
-                payload_data = message.pack()
-                payload_type = payload_message_to_type[type(message)]
-                data_bytes = self._pack_doip(
-                    payload_type, payload_data)
-                logger.debug(
-                    "Sending DoIP DiagnosticMessage: Type: 0x{:X}, Payload Size: {}, Payload: {}".format(
-                        payload_type,
-                        len(payload_data),
-                        " ".join(
-                            f"{byte:02X}" for byte in payload_data),
-                    )
-                )
-                self.transport.write(data_bytes)
+
+            elif request.service == TesterPresent:
+                logger.info(
+                    f"Received TesterPresent, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                uds_response = Response(
+                    TesterPresent, 0, b'\x00').get_payload()
+
+            self._send_diagnostic_message(source_address, target_address, uds_response)
 
     def dataReceived(self, data):
         logger.info(f"TCP: Received {data}")
@@ -401,7 +408,6 @@ class DoIPTCPServer(Protocol):
             if type(result) == DiagnosticMessage:
                 logger.info(f"Received DiagnosticMessage: {result}")
                 source_address = result.source_address
-                target_address = result.target_address
                 user_data = result.user_data  # uds message
 
                 # 诊断消息回复
@@ -411,7 +417,6 @@ class DoIPTCPServer(Protocol):
                 # UDS MESSAGE 处理
                 self._uds_request_handler(
                     self.logical_address, source_address, user_data)
-
 
 class DoIPFactory(Factory):
     def __init__(self, vin, logical_address, eid, gid, further_action_required=0):
@@ -424,7 +429,6 @@ class DoIPFactory(Factory):
     def buildProtocol(self, addr):
         return DoIPTCPServer(self.vin, self.logical_address, self.eid, self.gid, self.further_action_required)
 
-
 def start_server(vin, logical_address, eid, gid, port=13400):
     reactor.listenUDP(port, DoIPUDPServer(vin, logical_address, eid, gid))
     logger.info(f"Listening on UDP port {port}")
@@ -432,8 +436,9 @@ def start_server(vin, logical_address, eid, gid, port=13400):
     factory = DoIPFactory(vin, logical_address, eid, gid)
     reactor.listenTCP(port, factory)
     logger.info(f"Listening on TCP port {port}")
-    reactor.run()
 
+    reactor.callLater(0, start_periodic_task_send_vehicle_announcement, vin, logical_address, eid, gid, 0, 2, 2)
+    reactor.run()
 
 def load_ecu_conf():
     try:
@@ -461,8 +466,4 @@ if __name__ == "__main__":
     eid = ecu_conf['ECU']['eid']
     gid = ecu_conf['ECU']['gid']
 
-    logger.info(payload_message_to_type)
-
-    # Example usage
-    # start_thread_send_vehicle_announcement(vin, logical_address, eid, gid, 0)
     start_server(vin, logical_address, eid, gid)
