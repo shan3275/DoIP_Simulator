@@ -381,7 +381,6 @@ class DoIPTCPServer(Protocol):
         if request is not None and request.service is not None and request.suppress_positive_response is not True:
             code = 0
             subfunction = request.subfunction
-            logger.info(f"UDS Request subfunction: {subfunction}")
             data = b''
             if request.service == ECUReset:
                 logger.info(
@@ -423,6 +422,13 @@ class DoIPTCPServer(Protocol):
                 elif subfunction == 0x02:
                     data = subfunction.to_bytes(1, byteorder='big')
                 logger.info(f"request.data: {request.data}")
+            
+            elif request.service == RequestDownload:
+                logger.info(
+                    f"Received RequestDownload, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                code = 0
+                logger.info(' '.join([f'{byte:02x}' for byte in request.data]))
+                data = b'\x20\x08\x02'
             
             if request.suppress_positive_response is not True :
                 # 确保data是bytes类型
