@@ -23,6 +23,7 @@ from messages import *
 from udsoncan.Request import Request
 from udsoncan.Response import Response
 from udsoncan.services import *
+from udsoncan import DataIdentifier
 
 logger = logging.getLogger("doipserver")
 # 设置日志级别
@@ -398,7 +399,13 @@ class DoIPTCPServer(Protocol):
                 logger.info(
                     f"Received ReadDataByIdentifier, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 code = 0
-                data = request.data + b'\x02'
+                id_value = b'\x00'
+                id = int.from_bytes(request.data, byteorder='big')
+                if id == DataIdentifier.ActiveDiagnosticSession:
+                    id_value = b'\x02'
+                elif id == DataIdentifier.VIN:
+                    id_value = self.vin.encode()
+                data = request.data + id_value
             
             if request.suppress_positive_response is not True :
                 # 确保data是bytes类型

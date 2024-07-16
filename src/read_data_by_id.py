@@ -14,7 +14,7 @@ config = {
     'tolerate_zero_padding': True,
     'ignore_all_zero_dtc': True,
     'data_identifiers': {
-        DataIdentifier.VIN: DidCodec('utf-8'),  # 假设我们要读取的是车辆识别号（VIN）
+        DataIdentifier.VIN: DidCodec('17s'),  # 假设我们要读取的是车辆识别号（VIN）
         DataIdentifier.ActiveDiagnosticSession: DidCodec('B')  # 假设我们要读取的是当前诊断会话
     }
 }
@@ -22,3 +22,4 @@ config = {
 uds_connection = DoIPClientUDSConnector(client)
 with Client(uds_connection, config=config) as uds_client:
     uds_client.read_data_by_identifier(DataIdentifier.ActiveDiagnosticSession)
+    uds_client.read_data_by_identifier(DataIdentifier.VIN)
