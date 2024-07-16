@@ -394,10 +394,18 @@ class DoIPTCPServer(Protocol):
                     f"Received DiagnosticSessionControl, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 code = 0
                 data = b'\x02\x00\x19\x01\xf4'
+            elif request.service == ReadDataByIdentifier:
+                logger.info(
+                    f"Received ReadDataByIdentifier, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                code = 0
+                data = request.data + b'\x02'
             
             if request.suppress_positive_response is not True :
-                logger.info(f"Sending UDS Response: {code}, {data}")
+                # 确保data是bytes类型
+                if isinstance(data, bytearray):
+                    data = bytes(data)
                 uds_response = Response(request.service, code, data).get_payload()
+                logger.info(f"UDS Response: {uds_response}")
                 self._send_diagnostic_message(source_address, target_address, uds_response)
 
     def dataReceived(self, data):
