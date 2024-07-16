@@ -389,6 +389,11 @@ class DoIPTCPServer(Protocol):
                     f"Received TesterPresent, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 code = 0
                 data = b'\x00'
+            elif request.service == DiagnosticSessionControl:
+                logger.info(
+                    f"Received DiagnosticSessionControl, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                code = 0
+                data = b'\x02\x00\x19\x01\xf4'
             
             if request.suppress_positive_response is not True :
                 logger.info(f"Sending UDS Response: {code}, {data}")

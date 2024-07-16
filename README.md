@@ -19,7 +19,7 @@
 
 | 大类 | SID(0x) | 诊断服务名 | 服务Service | 支持情况 |
 |-------|-------|-------|-------|-------|
-| 诊断和通信管理功能单元 | 10 | 诊断会话控制 | Diagnostic Session Control | 不支持 |
+| 诊断和通信管理功能单元 | 10 | 诊断会话控制 | Diagnostic Session Control | 支持 |
 | 诊断和通信管理功能单元 | 11 | ECU复位 | ECU Reset | 支持 |
 | 诊断和通信管理功能单元 | 27 | 安全访问 | Security Access | 不支持 |
 | 诊断和通信管理功能单元 | 28 | 通讯控制 | Communication Control | 不支持 |
