@@ -23,7 +23,7 @@ from messages import *
 from udsoncan.Request import Request
 from udsoncan.Response import Response
 from udsoncan.services import *
-from udsoncan import DataIdentifier, ResponseCode
+from udsoncan import DataIdentifier, Routine
 import random
 
 logger = logging.getLogger("doipserver")
@@ -473,6 +473,7 @@ class DoIPTCPServer(Protocol):
                 logger.info(
                     f"Received RoutineControl, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
                 logger.info(' '.join([f'{byte:02x}' for byte in request.data]))
+                rid = int.from_bytes(request.data[:2], byteorder='big')
                 # 先发送一个response is pending message
                 code = Response.Code.RequestCorrectlyReceived_ResponsePending
                 data = None
@@ -480,7 +481,11 @@ class DoIPTCPServer(Protocol):
                 self.transport.doWrite()
                 time.sleep(0.1)
                 code = Response.Code.PositiveResponse
-                data = subfunction.to_bytes(1, byteorder='big') + request.data[0:2] + b'\x10\x00'
+                if rid == Routine.EraseMemory:
+                    logger.info("RoutineControl: EraseMemory")
+                    data = subfunction.to_bytes(1, byteorder='big') + request.data[0:2] + b'\x10'
+                else:
+                    data = subfunction.to_bytes(1, byteorder='big') + request.data[0:2] + b'\x10\x00'
             
             if request.suppress_positive_response is not True :
                 self._send_uds_response(source_address, target_address, request.service, code, data)

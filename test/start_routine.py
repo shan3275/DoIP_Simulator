@@ -6,6 +6,7 @@ from udsoncan import DidCodec, Dtc, DataIdentifier
 from udsoncan.common.dids import *
 from udsoncan.services import *
 from udsoncan.client import Client
+from udsoncan import DataIdentifier, Routine
 from doipclient.connectors import DoIPClientUDSConnector
 from doipclient import DoIPClient
 
@@ -29,8 +30,8 @@ uds_connection = DoIPClientUDSConnector(client)
 with Client(uds_connection, config=config) as uds_client:
     try:
         # 执行诊断例程，例程ID和选项需要根据具体情况确定
-        routine_id = 0x0212  # 假设的例程ID
-        routine_option = random.randbytes(50)  # 假设的例程选项
+        routine_id = Routine.EraseMemory  # 假设的例程ID
+        routine_option = random.randbytes(8)  # 假设的例程选项
         
         # 启动例程
         response = uds_client.start_routine(routine_id, routine_option)
