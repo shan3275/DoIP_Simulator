@@ -23,7 +23,7 @@ from messages import *
 from udsoncan.Request import Request
 from udsoncan.Response import Response
 from udsoncan.services import *
-from udsoncan import DataIdentifier
+from udsoncan import DataIdentifier, ResponseCode
 import random
 
 logger = logging.getLogger("doipserver")
@@ -309,10 +309,13 @@ class DoIPTCPServer(Protocol):
         self.gid = gid
         self.further_action_required = further_action_required
         self.seed = random.randbytes(3)
+        self.max_number_of_block_length = 0x0fa2  # 往ECU下载数据的最大块长度
 
     def connectionMade(self):
         peer = self.transport.getPeer()
         logger.info(f"TCP: Connection made from {peer.host}:{peer.port}")
+        self.append_file_name = str(peer.host) + '_' + str(peer.port) + '.bin'
+        logger.info(f"Append to file: {self.append_file_name}")
 
     @staticmethod
     def _pack_doip(payload_type, payload_data, protocol_version=0x02):
@@ -373,7 +376,24 @@ class DoIPTCPServer(Protocol):
             )
         )
         self.transport.write(data_bytes)
+    
+    def _send_uds_response(self, source_address, target_address, service, code, data):
+        # 确保data是bytes类型
+        if isinstance(data, bytearray):
+            data = bytes(data)
+        uds_response = Response(service, code, data).get_payload()
+        logger.info(f"UDS Response: {uds_response}")
+        self._send_diagnostic_message(source_address, target_address, uds_response)
 
+    def append_to_file(self, data):
+        """
+        往指定的文件中追加写入数据。如果文件不存在，则创建文件。
+        
+        :param file_path: 文件的路径
+        :param data: 要写入的数据
+        """
+        with open(self.append_file_name, 'ab') as file:
+            file.write(data)
 
     def _uds_request_handler(self, source_address, target_address, user_data):
         logger.info(f"Received UDS Message: {user_data}  len: {len(user_data)} {type(user_data)}")
@@ -385,25 +405,25 @@ class DoIPTCPServer(Protocol):
             if request.service == ECUReset:
                 logger.info(
                     f"Received ECUReset, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                code = 0
+                code = Response.Code.PositiveResponse
                 data = subfunction.to_bytes(1, byteorder='big')
 
             elif request.service == TesterPresent:
                 logger.info(
                     f"Received TesterPresent, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                code = 0
+                code = Response.Code.PositiveResponse
                 data = subfunction.to_bytes(1, byteorder='big')
 
             elif request.service == DiagnosticSessionControl:
                 logger.info(
                     f"Received DiagnosticSessionControl, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                code = 0
+                code = Response.Code.PositiveResponse
                 data = subfunction.to_bytes(1, byteorder='big') + b'\x00\x19\x01\xf4'
 
             elif request.service == ReadDataByIdentifier:
                 logger.info(
                     f"Received ReadDataByIdentifier, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                code = 0
+                code = Response.Code.PositiveResponse
                 id_value = b'\x00'
                 id = int.from_bytes(request.data, byteorder='big')
                 if id == DataIdentifier.ActiveDiagnosticSession:
@@ -415,7 +435,7 @@ class DoIPTCPServer(Protocol):
             elif request.service == SecurityAccess:
                 logger.info(
                     f"Received SecurityAccess, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                code = 0
+                code = Response.Code.PositiveResponse
                 logger.info(f"SecurityAccess: {request}  {request.data}")
                 if subfunction == 0x01:
                     data = subfunction.to_bytes(1, byteorder='big') + self.seed
@@ -426,17 +446,26 @@ class DoIPTCPServer(Protocol):
             elif request.service == RequestDownload:
                 logger.info(
                     f"Received RequestDownload, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                code = 0
+                code = Response.Code.PositiveResponse
                 logger.info(' '.join([f'{byte:02x}' for byte in request.data]))
-                data = b'\x20\x08\x02'
+                data = b'\x20' + self.max_number_of_block_length.to_bytes(2, byteorder='big')
+            
+            elif request.service == TransferData:
+                logger.info(
+                    f"Received TransferData, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                logger.info(' '.join([f'{byte:02x}' for byte in request.data]))
+                self.append_to_file(request.data[1:])
+                # 先发送一个response is pending message
+                code = Response.Code.RequestCorrectlyReceived_ResponsePending
+                data = None
+                self._send_uds_response(source_address, target_address, request.service, code, data)
+                self.transport.doWrite()
+                time.sleep(0.1)
+                code = Response.Code.PositiveResponse
+                data = request.data[0].to_bytes(1, byteorder='big')
             
             if request.suppress_positive_response is not True :
-                # 确保data是bytes类型
-                if isinstance(data, bytearray):
-                    data = bytes(data)
-                uds_response = Response(request.service, code, data).get_payload()
-                logger.info(f"UDS Response: {uds_response}")
-                self._send_diagnostic_message(source_address, target_address, uds_response)
+                self._send_uds_response(source_address, target_address, request.service, code, data)
 
     def dataReceived(self, data):
         logger.info(f"TCP: Received {data}")
