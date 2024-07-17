@@ -27,6 +27,7 @@
 | 数据传输类 | 22 | 通过ID读数据 | Read Data By Identifier | 支持 |
 | 上传下载功能单元 | 34 | 请求下载 | Request Download | 支持 |
 | 上传下载功能单元 | 36 | 数据传输 | Transfer Data | 支持 |
+| 上传下载功能单元 | 37 | 请求退出传输 | Transfer Data Exit | 支持 |
 
 ### 3. doipserver 支持服务类型
 

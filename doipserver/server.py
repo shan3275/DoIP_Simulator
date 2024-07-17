@@ -453,7 +453,6 @@ class DoIPTCPServer(Protocol):
             elif request.service == TransferData:
                 logger.info(
                     f"Received TransferData, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
-                logger.info(' '.join([f'{byte:02x}' for byte in request.data]))
                 self.append_to_file(request.data[1:])
                 # 先发送一个response is pending message
                 code = Response.Code.RequestCorrectlyReceived_ResponsePending
@@ -463,6 +462,12 @@ class DoIPTCPServer(Protocol):
                 time.sleep(0.1)
                 code = Response.Code.PositiveResponse
                 data = request.data[0].to_bytes(1, byteorder='big')
+            
+            elif request.service == RequestTransferExit:
+                logger.info(
+                    f"Received RequestTransferExit, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                code = Response.Code.PositiveResponse
+                data = None
             
             if request.suppress_positive_response is not True :
                 self._send_uds_response(source_address, target_address, request.service, code, data)
