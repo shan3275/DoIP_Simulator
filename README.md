@@ -25,6 +25,7 @@
 | 诊断和通信管理功能单元 | 28 | 通讯控制 | Communication Control | 不支持 |
 | 诊断和通信管理功能单元 | 3E | 待机握手 | Tester Present | 支持 |
 | 数据传输类 | 22 | 通过ID读数据 | Read Data By Identifier | 支持 |
+| 例程功能类 | 31 | 例行程序控制 | Routine Control | 支持 |
 | 上传下载功能单元 | 34 | 请求下载 | Request Download | 支持 |
 | 上传下载功能单元 | 36 | 数据传输 | Transfer Data | 支持 |
 | 上传下载功能单元 | 37 | 请求退出传输 | Transfer Data Exit | 支持 |

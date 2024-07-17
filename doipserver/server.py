@@ -469,6 +469,19 @@ class DoIPTCPServer(Protocol):
                 code = Response.Code.PositiveResponse
                 data = None
             
+            elif request.service == RoutineControl:
+                logger.info(
+                    f"Received RoutineControl, request.subfunction: {request.subfunction}, suppress_positive_response: {request.suppress_positive_response}")
+                logger.info(' '.join([f'{byte:02x}' for byte in request.data]))
+                # 先发送一个response is pending message
+                code = Response.Code.RequestCorrectlyReceived_ResponsePending
+                data = None
+                self._send_uds_response(source_address, target_address, request.service, code, data)
+                self.transport.doWrite()
+                time.sleep(0.1)
+                code = Response.Code.PositiveResponse
+                data = subfunction.to_bytes(1, byteorder='big') + request.data[0:2] + b'\x10\x00'
+            
             if request.suppress_positive_response is not True :
                 self._send_uds_response(source_address, target_address, request.service, code, data)
 
