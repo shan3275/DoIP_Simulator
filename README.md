@@ -37,3 +37,10 @@
 - TCP单播服务
 
 ### 4. 支持ECU Gateway 信息配置
+
+### 5. 使用说明
+
+```shell
+cd doipserver
+sudo python3 server.py
+```
