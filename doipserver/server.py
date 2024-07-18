@@ -1,16 +1,12 @@
 from twisted.internet import reactor
 from twisted.internet.protocol import DatagramProtocol, Factory, Protocol
 import logging
-import ipaddress
 import socket
 import struct
 import time
 import sys
-import threading
-import ssl
 import yaml
 from enum import IntEnum
-from typing import Union
 from constants import (
     A_DOIP_CTRL,
     TCP_DATA_UNSECURED,
@@ -26,21 +22,26 @@ from udsoncan.services import *
 from udsoncan import DataIdentifier, Routine
 import random
 
-logger = logging.getLogger("doipserver")
-# 设置日志级别
-logger.setLevel(logging.DEBUG)
+global logger
 
-# 创建一个流处理器并设置级别
-stream_handler = logging.StreamHandler(sys.stdout)
-stream_handler.setLevel(logging.DEBUG)
+def setup_logger():
 
-# （可选）设置日志格式
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-stream_handler.setFormatter(formatter)
+    logger = logging.getLogger("doipserver")
+    # 设置日志级别
+    logger.setLevel(logging.DEBUG)
 
-# 将流处理器添加到logger
-logger.addHandler(stream_handler)
+    # 创建一个流处理器并设置级别
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(logging.DEBUG)
+
+    # （可选）设置日志格式
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    stream_handler.setFormatter(formatter)
+
+    # 将流处理器添加到logger
+    logger.addHandler(stream_handler)
+    return logger
 
 
 class Parser:
@@ -557,6 +558,7 @@ def load_ecu_conf():
 
 
 if __name__ == "__main__":
+    logger = setup_logger()
     ecu_conf = load_ecu_conf()
     if ecu_conf is None:
         exit(1)
